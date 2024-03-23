@@ -1,0 +1,79 @@
+pipeline {
+    agent any
+
+    tools{
+        nodejs 'nodejs14.17.5'
+    }
+
+    stages {
+        stage('Prepare') {
+            steps {
+                sh 'echo "Clonning Repository"'
+                git branch: 'develop',
+                    url: 'https://jenkins:z3AsWySmuEKmJE6ex9Sy@lab.ssafy.com/s07-webmobile1-sub2/S07P12A502.git',
+                    credentialsId: 'orleave-access'
+            }
+            post {
+                success {
+                    sh 'echo "Successfully Cloned Repository"'
+                }
+                failure {
+                    sh 'echo "Fail Cloned Repository"'
+                }
+            }
+        }
+        stage('Frontend Bulid') {
+            steps {
+                sh 'echo "Bulid Gradle Start"'
+                sh "cp ../frontend-deploy/index.js ./frontend/src/api"
+                sh "cp ../frontend-deploy/config/index.js ./frontend/src/config"
+                sh "mkdir -p ./frontend/nginx"
+                sh "cp ../frontend-deploy/default.conf ./frontend/nginx"
+                dir('./frontend') {
+                    sh "npm install"
+                    sh "npm run build"
+                }
+            }
+            post {
+                failure {
+                    sh 'echo "Frontend Build Fail"'
+                }
+            }
+        }
+        stage('Backend Bulid Gradle') {
+            steps {
+                sh "cp ../backend-deploy/*.properties ./backend/src/main/resources"
+                sh "cp ../backend-deploy/Dockerfile ./backend"
+                sh "cp ../backend-deploy/build.gradle ./backend"
+                sh 'echo "Bulid Gradle Start"'
+                dir('./backend') {
+                    sh "./gradlew clean build"
+                }
+            }
+            post {
+                failure {
+                    sh 'echo "Bulid Gradle Fail"'
+                }
+            }
+        }
+        stage('Bulid Docker') {
+            steps {
+                dir('./frontend') {
+                    sh "docker build -t nginx-vue:0.1 ."
+                    sh "docker stop nginx_vue"
+                    sh "docker run --rm --name nginx_vue -d -p 3000:80 nginx-vue:0.1"
+                }
+                dir('./backend') {
+                    sh "docker build -t orleave_backend:0.1 ."
+                    sh "docker stop orleave"
+                    sh "docker run --rm --name orleave -d -p 8181:8181 orleave_backend:0.1"
+                }
+            }
+            post {
+                failure {
+                    sh 'echo "Bulid Docker Fail"'
+                }
+            }
+        }
+    }
+}
